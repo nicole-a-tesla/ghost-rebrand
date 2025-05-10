@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useRouter } from 'next/router';
 
-export default function RebrandForm({setRebrandRequested}: {setRebrandRequested: (rebrandRequested: boolean) => void}) {
+export default function RebrandForm() {
+  const router = useRouter();
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -37,9 +39,8 @@ export default function RebrandForm({setRebrandRequested}: {setRebrandRequested:
         body: JSON.stringify({ siteUrl, apiKey, oldName, newName }),
       });
 
-      await response.json();
-      setIsSubmitting(false);
-      setRebrandRequested(true);
+      const { jobId } = await response.json();
+      router.push(`/progress/${jobId}`);
     } catch (error) {
       console.error(error);
       setError(`An error occurred: ${(error as Error).message}`);
