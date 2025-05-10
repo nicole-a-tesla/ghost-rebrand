@@ -1,11 +1,12 @@
 import { useState } from 'react';
 
-export default function RebrandForm() {
+export default function RebrandForm({setRebrandRequested}: {setRebrandRequested: (rebrandRequested: boolean) => void}) {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     siteUrl: '',
     apiKey: '',
+    oldName: '',
     newName: '',
   });
 
@@ -13,36 +14,34 @@ export default function RebrandForm() {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
     setIsSubmitting(true);
 
-    const { siteUrl, apiKey, newName } = formData;
+    const { siteUrl, apiKey, oldName, newName } = formData;
 
-    if (!siteUrl || !apiKey || !newName) {
+    if (!siteUrl || !apiKey || !oldName || !newName) {
       setError('All fields are required');
       setIsSubmitting(false);
       return;
     }
 
     try {
-      const response = await fetch('/api/rebrand', {
+      const response = await fetch('/api/rename', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ siteUrl, apiKey, newName }),
+        body: JSON.stringify({ siteUrl, apiKey, oldName, newName }),
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const data = await response.json();
-      console.log(data);
+      await response.json();
+      setIsSubmitting(false);
+      setRebrandRequested(true);
     } catch (error) {
-      console.error('Error:', error);
+      console.error(error);
       setError(`An error occurred: ${(error as Error).message}`);
     } finally {
       setIsSubmitting(false);
@@ -85,6 +84,19 @@ export default function RebrandForm() {
         </div>
 
         <div>
+          <label className="block text-sm font-medium text-gray-700">Old Name</label>
+          <input
+            type="text"
+            name="oldName"
+            value={formData.oldName}
+            onChange={handleChange}
+            required
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            placeholder="Old Name"
+          />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-gray-700">New Name</label>
           <input
             type="text"
@@ -96,6 +108,8 @@ export default function RebrandForm() {
             placeholder="New Name"
           />
         </div>
+
+        {error && <p className="text-red-500 text-sm">{error}</p>}
 
         <button
           type="submit"
