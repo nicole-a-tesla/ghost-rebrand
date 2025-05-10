@@ -1,7 +1,10 @@
 
 export const findAndReplaceAll = (sourceStr: string, searchStr: string, replaceStr: string): string => {
+  if (searchStr.length === 0) {
+    return sourceStr;
+  }
   const safeSearchStr = escapeRegExp(searchStr);
-  const regex = new RegExp(safeSearchStr, 'gi');
+  const regex = new RegExp(safeSearchStr, 'g');
   return sourceStr.replaceAll(regex, replaceStr);
 }
 
