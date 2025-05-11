@@ -1,5 +1,4 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getJob } from "~/lib/stateManager";
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const { jobId } = req.query as { jobId: string };
@@ -19,21 +18,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
   // handle job progress updates
   async function sendUpdate() {
-    try {
-      const job = await getJob(jobId);
-      res.write(`data: ${JSON.stringify(job)}\n\n`);
-
-      // end if complete
-      if (job.status === "completed" || job.status === "failed") {
-        res.end();
-        clearInterval(intervalId);
-      }
-    } catch (error) {
-      console.error(`Error fetching job progress for ${jobId}:`, error);
-      res.write(`data: ${JSON.stringify({ error: "Error fetching job progress" })}\n\n`);
-      res.end();
-      clearInterval(intervalId);
-    }
+    // todo
   }
 
   // send updates every second
