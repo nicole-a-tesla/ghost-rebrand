@@ -2,7 +2,7 @@ import { getQueue } from './queue';
 import { getRedisClient } from './redis';
 import GhostAdminApi, { type Post } from '@tryghost/admin-api';
 import { findAndReplaceAll } from './utils';
-import { type JobData, type ProcessPostResult } from '../types.d.ts';
+import type { JobData, ProcessPostResult } from '../types.d.ts';
 
 const CONCURRENCY = 5;
 
