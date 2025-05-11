@@ -26,7 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       version: "v5.0",
     });
 
-    const posts = await ghostApi.posts.browse({ limit: 1 });
+    // typescript seems to be inferring wrong type here?
+    const posts: any = await ghostApi.posts.browse({ limit: 1 });
     const totalPostCount = posts.meta?.pagination?.total;
 
     console.log("Total posts count:", totalPostCount);

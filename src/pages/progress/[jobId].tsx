@@ -89,18 +89,6 @@ export default function ProgressPage() {
 
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 my-8">
-
-     <div>
-       <h3>Data:</h3>
-       <p>connected: {connected}</p>
-       <p>error: {error}</p>
-       <p>progressData:</p>
-       { progressData && progressData.totalCount && Object.entries(progressData).map(([key, value]) => (
-         <p key={key}>{key}: {value}</p>
-       )) }
-       <p>percentDone: {percentDone}</p>
-     </div>
-
       <h1 className="text-2xl font-semibold text-gray-800 mb-6">
         Rebranding Progress
       </h1>

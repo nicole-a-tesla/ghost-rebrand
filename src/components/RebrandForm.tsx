@@ -39,8 +39,8 @@ export default function RebrandForm() {
         body: JSON.stringify({ siteUrl, apiKey, oldName, newName }),
       });
 
-      const { jobId } = await response.json();
-      router.push(`/progress/${jobId}`);
+      await response.json();
+      // router.push(`/progress/${jobId}`);
     } catch (error) {
       console.error(error);
       setError(`An error occurred: ${(error as Error).message}`);
