@@ -8,8 +8,43 @@ const CONCURRENCY = 5;
 
 const queue = getQueue();
 
-queue.process(CONCURRENCY, async (job) => {
-  console.log('Processing job:', job.data.jobId);
+export const processPost = async (
+  ghostApi: GhostAdminApi,
+  post: Post,
+  oldName: string,
+  newName: string
+) => {
+    const result = { postId: post.id, success: false } as ProcessPostResult;
+    // TODO get mobiledoc posts if lexical is not available
+    const postContent = post.lexical;
+
+    if (!postContent) {
+      // could not process post content, mark as failed
+      return result;
+    }
+
+    if (!postContent.includes(oldName)) {
+      // no op, mark success and move on
+      result.success = true;
+      return result;
+    }
+
+    const newContent = findAndReplaceAll(postContent, oldName, newName);
+
+    try {
+      await ghostApi.posts.edit({
+        id: post.id,
+        lexical: newContent,
+        updated_at: post.updated_at,
+      });
+      result.success = true;
+      return result;
+    } catch (error) {
+      return result;
+    }
+}
+
+await queue.process(CONCURRENCY, async (job) => {
   const {
     jobId,
     siteUrl,
@@ -36,36 +71,15 @@ queue.process(CONCURRENCY, async (job) => {
       ? successfullyProcessed.push(result.postId)
       : processFailed.push(result.postId);
   }
+
   const redis = await getRedisClient();
-  await redis.sAdd(`job:${jobId}:processedPosts`, successfullyProcessed);
+
+  if (successfullyProcessed.length > 0) {
+    await redis.sAdd(`job:${jobId}:processedPosts`, successfullyProcessed);
+  }
+
+  if (processFailed.length > 0) {
+    await redis.sAdd(`job:${jobId}:failedPosts`, processFailed);
+  }
 });
 
-const processPost = async (
-  ghostApi: GhostAdminApi,
-  post: Post,
-  oldName: string,
-  newName: string
-) => {
-    const result = { postId: post.id, success: false } as ProcessPostResult;
-    console.log({postId: post.id})
-    // TODO get mobiledoc posts if lexical is not available
-    const postContent = post.lexical;
-    const canBeProcessed = postContent && postContent.includes(oldName);
-    if (!canBeProcessed) {
-      return result;
-    }
-
-    const newContent = findAndReplaceAll(postContent, oldName, newName);
-
-    try {
-      await ghostApi.posts.edit({
-        id: post.id,
-        lexical: newContent,
-        updated_at: post.updated_at,
-      });
-      result.success = true;
-      return result;
-    } catch (error) {
-      return result;
-    }
-}

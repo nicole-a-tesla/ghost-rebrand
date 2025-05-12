@@ -6,17 +6,17 @@ export default function ProgressPage() {
   const router = useRouter();
   const { jobId } = router.query;
 
-  const [progressData, setProgressData] = useState<any>(null);
+  const [jobState, setJobState] = useState({
+    status: "pending",
+    totalPostCount: null,
+    completedIdCount: 0,
+    failedIds: []
+  })
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  const log = (...args: any[]) => {
-    console.log(
-      util.inspect(args)
-    )
-  }
   useEffect(() => {
     if (!router.isReady || !jobId) return;
 
@@ -29,7 +29,6 @@ export default function ProgressPage() {
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
-      console.log("Connection opened");
       setConnected(true);
       setError(null);
     }
@@ -38,40 +37,32 @@ export default function ProgressPage() {
 
       try {
         const data = JSON.parse(event.data);
-        console.log("Message received:");
-        log({ data });
-        if (data.connected) {
-          setConnected(true);
-          return
-        }
 
+        // todo delete?
         if (data.error) {
           setError(data.error);
           return;
         }
 
-        setProgressData(data);
+        setJobState(data)
 
-        if (data.status === "complete") {
+        if (data.status === "completed") {
           eventSource.close();
           setConnected(false);
         }
 
       } catch (error) { 
-        console.log({error})
         setError(`Error parsing event data: ${error}`);
       }
     };
 
     eventSource.onerror = (error) => {
-      console.log("Error occurred:");
       setConnected(false);
-      setError(`Error connecting to server: ${error}`);
+      setError(`Error connecting to server`);
     };
 
     // clean up
     return () => {
-      console.log("Cleaning up event source");
       eventSource.close();
       eventSourceRef.current = null;
     }
@@ -82,10 +73,9 @@ export default function ProgressPage() {
   }
 
   let percentDone = 0;
-  if (progressData && progressData.totalCount) {
-    percentDone = progressData.processedCount / progressData.totalCount * 100;
+  if (jobState.totalPostCount && jobState.totalPostCount > 0) {
+    percentDone = Math.floor((jobState.completedIdCount / jobState.totalPostCount) * 100);
   }
-
 
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 my-8">
@@ -95,7 +85,7 @@ export default function ProgressPage() {
 
       <div className="mb-4 flex items-center">
         <div
-          className={`w-3 h-3 rounded-full mr-2 ${connected ? "bg-green-500" : "bg-red-500 animate-pulse"}`}
+          className={`w-3 h-3 rounded-full mr-2 animate-pulse ${connected ? "bg-green-500" : "bg-red-500"}`}
           aria-hidden="true"
         ></div>
         <span className="text-sm text-gray-600">
@@ -118,35 +108,35 @@ export default function ProgressPage() {
 
         <div className="flex justify-between mt-2 text-sm text-gray-600">
           <span>{percentDone}% complete</span>
-          { progressData && (
+          { jobState.totalPostCount && (
             <span>
-              {progressData.processedCount} of {progressData.totalCount || "?"} posts processed
+              {jobState.completedIdCount} of {jobState.totalPostCount || "?"} posts processed
             </span>
           )}
         </div>
       </div>
 
-      {progressData && (
+      {
         <div className="mb-4">
           <div className="flex items-center">
             <span className="text-sm font-medium text-gray-700 mr-2">Status:</span>
             <span className={`text-sm font-medium px-2 py-1 rounded ${
-              progressData.status === 'completed' ? 'bg-green-100 text-green-800' :
-              progressData.status === 'failed' ? 'bg-red-100 text-red-800' :
-              progressData.status === 'processing' ? 'bg-indigo-100 text-indigo-800' :
+              jobState.status === 'completed' ? 'bg-green-100 text-green-800' :
+              jobState.status === 'failed' ? 'bg-red-100 text-red-800' :
+              jobState.status === 'processing' ? 'bg-indigo-100 text-indigo-800' :
               'bg-gray-100 text-gray-800'
             }`}>
-              { progressData.status }
+              { jobState.status }
             </span>
           </div>
           
-          { progressData.status === 'processing' && (
+          { jobState.status === 'processing' && (
             <p className="text-sm text-gray-600 mt-2">
               Processing articles. This may take a few minutes depending on the size of your site.
             </p>
           )}
         </div>
-      )}
+      }
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-4" aria-live="assertive">
@@ -164,7 +154,7 @@ export default function ProgressPage() {
         </div>
       )}
 
-      {progressData && progressData.status === 'completed' && (
+      {jobState.status === 'completed' && (
         <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4" aria-live="polite">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -175,8 +165,16 @@ export default function ProgressPage() {
             <div className="ml-3">
               <h3 className="text-sm font-medium text-green-800">Rebranding Complete!</h3>
               <p className="text-sm text-green-700 mt-1">
-                Successfully updated {progressData.processedCount} articles.
+                Successfully processed {jobState.completedIdCount} articles.
               </p>
+              {jobState.failedIds.length !== 0 && (
+                <div className="text-sm text-green-700 mt-1">
+                  <p className="font-bold">However, {jobState.failedIds.length} posts could not be updated via the api. Please check the following posts and update manually if necessary:</p>
+                  <ul>
+                    { jobState.failedIds.map((id) => <li key={id}>{id}</li>) }
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         </div>

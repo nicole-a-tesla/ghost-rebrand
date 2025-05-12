@@ -1,11 +1,11 @@
 import Queue from 'bull';
 import Bull from 'bull';
+import 'dotenv/config'
 
-// todo check these settings
 const redisOptions = {
   redis: {
-    host: process.env.REDIS_HOST,
-    port: process.env.REDIS_PORT,
+    host: process.env.REDIS_HOST || 'localhost',
+    port: process.env.REDIS_PORT || 6379,
     password: process.env.REDIS_PASSWORD,
     db: 0,
     enableOffLineQueue: true,
@@ -22,12 +22,7 @@ export const getQueue = (): Bull.Queue => {
   if (!rebrandQueue) {
     rebrandQueue = new Queue('renaming-queue', redisOptions);
 
-    rebrandQueue.on('global:completed', (job, result) => {
-      console.log({job, result})
-      console.log(`Job ${job.id} completed with result: ${result}`);
-    });
     rebrandQueue.on('failed', (job, err) => {
-      console.log({job, err})
       console.error(`Job ${job.id} failed with error: ${err}`);
     });
 
