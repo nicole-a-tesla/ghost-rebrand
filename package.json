@@ -7,6 +7,7 @@
     "build": "next build",
     "check": "next lint && tsc --noEmit",
     "dev": "next dev --turbo",
+    "prod:with-worker": "concurrently \"npm run start\" \"npm run worker\"",
     "dev:with-worker": "concurrently \"npm run dev\" \"npm run worker\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
@@ -21,7 +22,7 @@
   },
   "dependencies": {
     "@t3-oss/env-nextjs": "^0.12.0",
-    "@tryghost/admin-api": "^1.13.13",
+    "@tryghost/admin-api": "^1.13.15",
     "bull": "^4.16.5",
     "dotenv": "^16.5.0",
     "next": "^15.2.3",
