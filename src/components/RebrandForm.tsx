@@ -1,7 +1,18 @@
-import { useState } from 'react';
 import { useRouter } from 'next/router';
+import { useState } from 'react';
 
-export default function RebrandForm() {
+interface FormData {
+  siteUrl: string;
+  apiKey: string;
+  oldName: string;
+  newName: string;
+}
+
+interface RebrandFormProps {
+  onSubmit?: (formdata: FormData) => Promise<{ jobId: string }>;
+}
+
+export default function RebrandForm({ onSubmit }: RebrandFormProps = {}) {
   const router = useRouter();
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -17,6 +28,21 @@ export default function RebrandForm() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const defaultSubmit = async (data: FormData) => {
+    const response = await fetch('/api/rename', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error, status: ${response.status}`);
+    }
+    return await response.json();
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
@@ -31,18 +57,10 @@ export default function RebrandForm() {
     }
 
     try {
-      const response = await fetch('/api/rename', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ siteUrl, apiKey, oldName, newName }),
-      });
-
-      const { jobId } = await response.json();
+      const submitFunction = onSubmit || defaultSubmit;
+      const { jobId } = await submitFunction(formData);
       router.push(`/progress/${jobId}`);
     } catch (error) {
-      console.error(error);
       setError(`An error occurred: ${(error as Error).message}`);
     } finally {
       setIsSubmitting(false);
@@ -56,8 +74,9 @@ export default function RebrandForm() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Ghost Site URL</label>
+          <label className="block text-sm font-medium text-gray-700" htmlFor="siteUrlInput">Ghost Site URL</label>
           <input
+            id="siteUrlInput"
             type="url"
             name="siteUrl"
             value={formData.siteUrl}
@@ -69,8 +88,9 @@ export default function RebrandForm() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Admin API Key</label>
+          <label className="block text-sm font-medium text-gray-700" htmlFor="apiKeyInput">Admin API Key</label>
           <input
+            id="apiKeyInput"
             type="password"
             name="apiKey"
             value={formData.apiKey}
@@ -85,8 +105,9 @@ export default function RebrandForm() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Old Name</label>
+          <label className="block text-sm font-medium text-gray-700" htmlFor="oldNameInput">Old Name</label>
           <input
+            id="oldNameInput"
             type="text"
             name="oldName"
             value={formData.oldName}
@@ -98,8 +119,9 @@ export default function RebrandForm() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">New Name</label>
+          <label className="block text-sm font-medium text-gray-700" htmlFor="newNameInput">New Name</label>
           <input
+            id="newNameInput"
             type="text"
             name="newName"
             value={formData.newName}
@@ -110,7 +132,7 @@ export default function RebrandForm() {
           />
         </div>
 
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+        {error && <p className="text-red-500 text-sm" role="alert">{error}</p>}
 
         <button
           type="submit"
