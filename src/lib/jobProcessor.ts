@@ -2,11 +2,24 @@ import { getQueue } from './queue';
 import { getRedisClient } from './redis';
 import GhostAdminApi, { type Post } from '@tryghost/admin-api';
 import { findAndReplaceAll } from './utils';
-import type { JobData, ProcessPostResult } from '../types.d.ts';
+import type { RedisClientType } from '@redis/client';
 
 const CONCURRENCY = 5;
 
-const queue = getQueue();
+interface JobData {
+  jobId: string;
+  siteUrl: string;
+  apiKey: string;
+  oldName: string;
+  newName: string;
+  batchSize: number;
+  page: number;
+}
+
+interface ProcessPostResult {
+  postId: string;
+  success: boolean;
+};
 
 export const processPost = async (
   ghostApi: GhostAdminApi,
@@ -15,65 +28,75 @@ export const processPost = async (
   newName: string
 ) => {
     const result = { postId: post.id, success: false } as ProcessPostResult;
-    // TODO get mobiledoc posts if lexical is not available
-    const postContent = post.lexical;
+    const { content, useMobiledoc } = extractPostContent(post);
 
-    if (!postContent) {
+    if (content === undefined) {
       // could not process post content, mark as failed
       return result;
     }
 
-    if (!postContent.includes(oldName)) {
-      // no op, mark success and move on
+    if (!content.includes(oldName)) {
+      // noop, mark success and move on
       result.success = true;
       return result;
     }
 
-    const newContent = findAndReplaceAll(postContent, oldName, newName);
+    const newContent = findAndReplaceAll(content, oldName, newName);
+    const newData = {
+      id: post.id,
+      updated_at: post.updated_at
+    }
+    useMobiledoc
+      ? newData.mobiledoc = newContent
+      : newData.lexical = newContent;
 
     try {
-      await ghostApi.posts.edit({
-        id: post.id,
-        lexical: newContent,
-        updated_at: post.updated_at,
-      });
+      await ghostApi.posts.edit(newData);
       result.success = true;
       return result;
     } catch (error) {
+      // Log error for debugging but don't throw
+      console.error(`Failed to update post ${post.id}:`, error);
       return result;
     }
 }
 
-await queue.process(CONCURRENCY, async (job) => {
-  const {
-    jobId,
-    siteUrl,
-    apiKey,
-    oldName,
-    newName,
-    batchSize,
-    page,
-  } = job.data as JobData;
+export const extractPostContent = (post: Post): { content?: string, useMobiledoc: boolean } => {
+  if (post.lexical !== undefined) {
+    return { content: post.lexical, useMobiledoc: false };
+  } else if (post.mobiledoc !== undefined) {
+    return { content: post.mobiledoc, useMobiledoc: true };
+  }
+  return { content: undefined, useMobiledoc: false };
+}
 
-  const ghostApi = new GhostAdminApi({
-    url: siteUrl,
-    key: apiKey,
-    version: 'v5.0',
-  });
-
-  const posts = await ghostApi.posts.browse({ limit: batchSize, page });
-  const successfullyProcessed = [];
-  const processFailed = [];
+export const processBatch = async (
+  ghostApi: GhostAdminApi,
+  posts: Post[],
+  oldName: string,
+  newName: string
+): Promise<{ successfullyProcessed: string[]; processFailed: string[] }> => {
+  const successfullyProcessed: string[] = [];
+  const processFailed: string[] = [];
 
   for (const post of posts) {
     const result = await processPost(ghostApi, post, oldName, newName);
-    result.success
-      ? successfullyProcessed.push(result.postId)
-      : processFailed.push(result.postId);
+    if (result.success) {
+      successfullyProcessed.push(result.postId);
+    } else {
+      processFailed.push(result.postId);
+    }
   }
 
-  const redis = await getRedisClient();
+  return { successfullyProcessed, processFailed };
+};
 
+export const updateJobStatus = async (
+  redis: RedisClientType,
+  jobId: string,
+  successfullyProcessed: string[],
+  processFailed: string[]
+): Promise<void> => {
   if (successfullyProcessed.length > 0) {
     await redis.sAdd(`job:${jobId}:processedPosts`, successfullyProcessed);
   }
@@ -81,5 +104,43 @@ await queue.process(CONCURRENCY, async (job) => {
   if (processFailed.length > 0) {
     await redis.sAdd(`job:${jobId}:failedPosts`, processFailed);
   }
-});
+};
 
+export const setupQueueProcessor = async () => {
+  const queue = getQueue();
+
+  await queue.process(CONCURRENCY, async (job) => {
+    const {
+      jobId,
+      siteUrl,
+      apiKey,
+      oldName,
+      newName,
+      batchSize,
+      page,
+    } = job.data as JobData;
+    try {
+      const ghostApi = new GhostAdminApi({
+        url: siteUrl,
+        key: apiKey,
+        version: 'v5.0',
+      });
+      const redis = await getRedisClient();
+
+      const posts = await ghostApi.posts.browse({ limit: batchSize, page });
+      const { successfullyProcessed, processFailed } = await processBatch(
+        ghostApi,
+        posts,
+        oldName,
+        newName
+      );
+      await updateJobStatus(redis, jobId, successfullyProcessed, processFailed);
+    } catch (error) {
+      console.error(`Failed to process job ${jobId}:`, error);
+      throw error;
+    }
+  });
+};
+
+// Auto-initialize when module is imported
+setupQueueProcessor().catch(console.error);
