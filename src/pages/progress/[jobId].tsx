@@ -1,72 +1,11 @@
-import { useState, useRef, useEffect } from "react";
 import { useRouter } from 'next/router';
-import util from "util";
+import { useJobProgress } from "~/hooks/useJobProgress";
 
 export default function ProgressPage() {
   const router = useRouter();
   const { jobId } = router.query;
 
-  const [jobState, setJobState] = useState({
-    status: "pending",
-    totalPostCount: null,
-    completedIdCount: 0,
-    failedIds: []
-  })
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const eventSourceRef = useRef<EventSource | null>(null);
-
-  useEffect(() => {
-    if (!router.isReady || !jobId) return;
-
-    // close existing connection if any
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-    // create new connection
-    const eventSource = new EventSource(`/api/progress/${jobId}`);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {
-      setConnected(true);
-      setError(null);
-    }
-
-    eventSource.onmessage = (event) => {
-
-      try {
-        const data = JSON.parse(event.data);
-
-        // todo delete?
-        if (data.error) {
-          setError(data.error);
-          return;
-        }
-
-        setJobState(data)
-
-        if (data.status === "completed") {
-          eventSource.close();
-          setConnected(false);
-        }
-
-      } catch (error) { 
-        setError(`Error parsing event data: ${error}`);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      setConnected(false);
-      setError(`Error connecting to server`);
-    };
-
-    // clean up
-    return () => {
-      eventSource.close();
-      eventSourceRef.current = null;
-    }
-  }, [router.isReady, jobId]);
+  const { jobState, connected, error } = useJobProgress(jobId, router.isReady);
 
   if (!router.isReady || !jobId) {
     return <div className="flex justify-center p-8">Loading...</div>;
@@ -179,8 +118,6 @@ export default function ProgressPage() {
           </div>
         </div>
       )}
-
-
     </div>
   );
 }
