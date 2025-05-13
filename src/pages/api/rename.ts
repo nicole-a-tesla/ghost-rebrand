@@ -3,68 +3,132 @@ import GhostAdminApi from "@tryghost/admin-api";
 import { getQueue } from "~/lib/queue";
 import { getRedisClient } from "~/lib/redis";
 import { v4 as uuidv4 } from 'uuid';
+import type { RedisClient } from "redis";
+import type { Queue } from "bull";
 
 const BATCH_SIZE = 5;
+const ONE_DAY_TTL = { EX: 24 * 60 * 60 };
+const QUEUE_OPTIONS = {
+  attempts: 3,
+  backoff: {
+    type: "exponential" as const,
+    delay: 5000,
+  }
+};
+
+export interface RequestBody {
+  siteUrl: string;
+  apiKey: string;
+  oldName: string;
+  newName: string;
+}
+
+interface GhostApiMeta {
+  pagination: {
+    total: number;
+  };
+}
+
+interface GhostApiResponse {
+  meta?: GhostApiMeta;
+}
+
+interface JobData {
+  jobId: string;
+  siteUrl: string;
+  apiKey: string;
+  oldName: string;
+  newName: string;
+  batchSize: number;
+  page: number;
+}
+
+export const validateRequestFields = (body: any): string[] => {
+  const requiredFields = ['siteUrl', 'apiKey', 'oldName', 'newName'];
+  const missingFields = requiredFields.filter(field => !body[field]);
+  return missingFields;
+};
+
+const getGhostPostTotal = async (ghostApi: any): Promise<number> => {
+  const posts: GhostApiResponse = await ghostApi.posts.browse({ limit: 1 });
+  const totalPostCount = posts.meta?.pagination?.total;
+  if (totalPostCount === undefined) {
+    throw new Error("Failed to fetch total post count from Ghost API");
+  }
+  return totalPostCount
+};
+
+export const addJobsToQueue = async (
+  jobData: Omit<JobData, 'page'>,
+  totalPageCount: number,
+  queue: any
+): Promise<void> => {
+  const promises = [];
+  
+  for (let i = 0; i < totalPageCount; i++) {
+    const promise = queue.add({
+      ...jobData,
+      page: i + 1,
+    }, QUEUE_OPTIONS);
+    promises.push(promise);
+  }
+  await Promise.all(promises);
+}
+
+export async function handleRenameKickoff(
+  body: RequestBody,
+  ghostApi: GhostAdminApi,
+  jobId: string,
+  redis: RedisClient,
+  queue: Queue
+) {
+  const { siteUrl, apiKey, oldName, newName } = body;
+
+  const totalPostCount = await getGhostPostTotal(ghostApi);
+  const totalPageCount = Math.ceil(totalPostCount / BATCH_SIZE);
+
+  await redis.set(`job:${jobId}`, totalPostCount, ONE_DAY_TTL);
+  await addJobsToQueue(
+    { jobId, siteUrl, apiKey, oldName, newName, batchSize: BATCH_SIZE },
+    totalPageCount,
+    queue
+  )
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method not allowed" });
   }
 
+  const body = req.body as RequestBody;
+  const missingFields = validateRequestFields(body);
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      message: "Missing required fields",
+      fields: missingFields
+    });
+  }
+
   try {
-    const { siteUrl, apiKey, oldName, newName } = req.body;
-
-    if (!siteUrl || !apiKey || !oldName || !newName) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-
     const jobId = uuidv4();
+    const redis = await getRedisClient();
+    const queue = getQueue();
 
     const ghostApi = new GhostAdminApi({
-      url: siteUrl,
-      key: apiKey,
+      url: req.body.siteUrl,
+      key: req.body.apiKey,
       version: "v5.0",
     });
 
-    // typescript seems to be inferring wrong type here?
-    const posts: any = await ghostApi.posts.browse({ limit: 1 });
-    const totalPostCount = posts.meta?.pagination?.total;
-
-    if (totalPostCount === undefined) {
-      return res.status(500).json({ message: "Failed to fetch total count" });
-    }
-
-    const totalPageCount = Math.ceil(totalPostCount / BATCH_SIZE);
-
-    const redis = await getRedisClient();
-    const oneDayTTL = { EX: 24 * 60 * 60 }; // 24 hours in seconds
-
-    // todo simplify this
-    await redis.set(`job:${jobId}`, JSON.stringify({
+    await handleRenameKickoff(
+      req.body,
+      ghostApi,
       jobId,
-      totalPostCount,
-    }), oneDayTTL);
+      redis,
+      queue
+    )
 
-    const queue = getQueue();
-    
-    // todo, does this needs to happen asynchronously for 10k+?
-    for (let i = 0; i < totalPageCount; i++) {
-      await queue.add({
-        jobId,
-        siteUrl,
-        apiKey,
-        oldName,
-        newName,
-        batchSize: BATCH_SIZE,
-        page: i + 1,
-      }, {
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 5000,
-        }
-      });
-    }
     return res.status(200).json({ message: "Job started", jobId });
   } catch (error) {
     console.error("Error creating job:", error);
