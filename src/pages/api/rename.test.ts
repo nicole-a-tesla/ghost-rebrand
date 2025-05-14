@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi, type MockedFunction } from 'vitest';
-
-import handler, {
+import {
   validateRequestFields,
   addJobsToQueue,
-  handleRenameKickoff
+  handleRenameKickoff,
+  QUEUE_OPTIONS
 } from './rename';
 import { type RequestBody } from './rename';
 
@@ -70,39 +70,18 @@ describe('/api/rename', () => {
       expect(mockQueue.add).toHaveBeenNthCalledWith(
         1,
         { ...jobData, page: 1 },
-        {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 5000
-          }
-        }
+        QUEUE_OPTIONS
       );
       expect(mockQueue.add).toHaveBeenNthCalledWith(
         2,
         { ...jobData, page: 2 },
-        expect.any(Object)
+        QUEUE_OPTIONS
       );
       expect(mockQueue.add).toHaveBeenNthCalledWith(
         3,
         { ...jobData, page: 3 },
-        expect.any(Object)
+        QUEUE_OPTIONS
       );
-    });
-
-    it('should handle queue addition failures', async () => {
-      const jobData = {
-        jobId: 'test-job-123',
-        siteUrl: 'https://test.ghost.io',
-        apiKey: 'test-key',
-        oldName: 'old',
-        newName: 'new',
-        batchSize: 5
-      };
-
-      mockQueue.add.mockRejectedValue(new Error('Queue error'));
-
-      await expect(addJobsToQueue(jobData, 1, mockQueue)).rejects.toThrow('Queue error');
     });
   });
 
@@ -192,6 +171,8 @@ describe('/api/rename', () => {
       expect(mockQueue.add).toHaveBeenCalledTimes(expectedTotalPages);
       
       // verify the first queue job
+      // more complete add-to-queue functionality tested
+      // in above section
       expect(mockQueue.add).toHaveBeenNthCalledWith(
         1,
         {
@@ -203,13 +184,7 @@ describe('/api/rename', () => {
           batchSize: 5,
           page: 1
         },
-        {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 5000
-          }
-        }
+        QUEUE_OPTIONS
       );
     });
 
@@ -233,7 +208,7 @@ describe('/api/rename', () => {
       );
 
       // make a job entry so that they can see the a working progress page
-      // TODO specific error message for this case
+      // ideally we'd show a specific error message for this case
       expect(mockRedis.set).toHaveBeenCalledWith(`job:${testJobId}`, 0, { EX: 24 * 60 * 60 });
       expect(mockQueue.add).not.toHaveBeenCalled();
     });

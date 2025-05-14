@@ -3,12 +3,12 @@ import GhostAdminApi from "@tryghost/admin-api";
 import { getQueue } from "~/lib/queue";
 import { getRedisClient } from "~/lib/redis";
 import { v4 as uuidv4 } from 'uuid';
-import type { RedisClient } from "redis";
 import type { Queue } from "bull";
+import type { RedisClientType } from "redis";
 
 const BATCH_SIZE = 5;
 const ONE_DAY_TTL = { EX: 24 * 60 * 60 };
-const QUEUE_OPTIONS = {
+export const QUEUE_OPTIONS = {
   attempts: 3,
   backoff: {
     type: "exponential" as const,
@@ -79,7 +79,7 @@ export async function handleRenameKickoff(
   body: RequestBody,
   ghostApi: GhostAdminApi,
   jobId: string,
-  redis: RedisClient,
+  redis: RedisClientType,
   queue: Queue
 ) {
   const { siteUrl, apiKey, oldName, newName } = body;

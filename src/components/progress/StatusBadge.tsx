@@ -31,7 +31,7 @@ export function StatusBadge({ status }: StatusBadgeProps) {
 
       {status === 'processing' && (
         <p className="text-sm text-gray-600 mt-2">
-          Processing articles. This may take a few minutes depending on the size of your site.
+          Processing articles. This may take a few minutes depending on the size of your site. Please don't create new posts while this task is in progress.
         </p>
       )}
     </div>
