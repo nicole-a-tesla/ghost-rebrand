@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { createMocks } from 'node-mocks-http';
-import type { NextApiRequest, NextApiResponse } from 'next';
 import { calculateJobStatus, fetchJobProgress } from './[jobId]';
 
 vi.mock('~/lib/queue', () => ({
@@ -12,10 +10,7 @@ vi.mock('~/lib/redis', () => ({
 }));
 
 describe('/api/progress/[jobId]', () => {
-  let req: NextApiRequest;
-  let res: NextApiResponse;
   let mockRedis: any;
-  let consoleSpy: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -30,32 +25,11 @@ describe('/api/progress/[jobId]', () => {
     const { getRedisClient } = await import('~/lib/redis');
     
     vi.mocked(getRedisClient).mockResolvedValue(mockRedis);
-
-    const { req: mockReq, res: mockRes } = createMocks<NextApiRequest, NextApiResponse>({
-      method: 'GET',
-      query: { jobId: 'test-job-123' }
-    });
-
-    req = mockReq;
-    res = mockRes;
-
-     // Mock response methods
-     res.write = vi.fn();
-     res.end = vi.fn();
-     res.setHeader = vi.fn();
- 
-     // Mock console methods
-     consoleSpy = {
-       error: vi.spyOn(console, 'error').mockImplementation(() => {}),
-       log: vi.spyOn(console, 'log').mockImplementation(() => {})
-     };
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllTimers();
-    consoleSpy.error.mockRestore();
-    consoleSpy.log.mockRestore();
   });
   describe('calculateJobStatus', () => {
     it('should return completed when all posts are processed', () => {

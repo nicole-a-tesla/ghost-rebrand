@@ -21,6 +21,19 @@ interface ProcessPostResult {
   success: boolean;
 };
 
+const getReplacementStringOrNull = (
+  currentValue: string|undefined,
+  oldName: string,
+  newName: string
+): string | null => {
+  const exists = currentValue !== undefined;
+  const includesTarget = exists && currentValue.includes(oldName);
+  if (includesTarget) {
+    return findAndReplaceAll(currentValue, oldName, newName)
+  }
+  return null;
+}
+
 export const processPost = async (
   ghostApi: GhostAdminApi,
   post: Post,
@@ -30,25 +43,34 @@ export const processPost = async (
     const result = { postId: post.id, success: false } as ProcessPostResult;
     const { content, useMobiledoc } = extractPostContent(post);
 
-    if (content === undefined) {
-      // could not process post content, mark as failed
+    if (content === undefined && post.title === undefined) {
+      // received no content to process, mark as failed
       return result;
     }
 
-    if (!content.includes(oldName)) {
+    const newContent = getReplacementStringOrNull(content, oldName, newName);
+    const newTitle = getReplacementStringOrNull(post.title, oldName, newName);
+
+    if (!newContent && !newTitle) {
       // noop, mark success and move on
       result.success = true;
       return result;
     }
 
-    const newContent = findAndReplaceAll(content, oldName, newName);
     const newData = {
       id: post.id,
       updated_at: post.updated_at
     }
-    useMobiledoc
-      ? newData.mobiledoc = newContent
-      : newData.lexical = newContent;
+
+    if (newContent) {
+      useMobiledoc
+        ? newData.mobiledoc = newContent
+        : newData.lexical = newContent;
+    }
+
+    if (newTitle) {
+      newData.title = newTitle;
+    }
 
     try {
       await ghostApi.posts.edit(newData);

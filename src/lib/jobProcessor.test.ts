@@ -114,6 +114,53 @@ describe('processor', () => {
       });
     });
 
+    it('should successfully update post title only', async () => {
+      const post = {
+        id: '1',
+        title: 'title with old name',
+        lexical: 'content with no target',
+        updated_at: '2023-12-01T00:00:00.000Z'
+      } as Post;
+
+      mockGhostApi.posts.edit.mockResolvedValue({});
+
+      const result = await processPost(mockGhostApi, post, 'old', 'new');
+
+      expect(mockGhostApi.posts.edit).toHaveBeenCalledWith({
+        id: '1',
+        title: 'title with new name',
+        updated_at: '2023-12-01T00:00:00.000Z',
+      });
+      expect(result).toEqual({
+        postId: '1',
+        success: true
+      });
+    });
+
+    it('should successfully update post title and content', async () => {
+      const post = {
+        id: '1',
+        title: 'title with old name',
+        lexical: 'content with old name',
+        updated_at: '2023-12-01T00:00:00.000Z'
+      } as Post;
+
+      mockGhostApi.posts.edit.mockResolvedValue({});
+
+      const result = await processPost(mockGhostApi, post, 'old', 'new');
+
+      expect(mockGhostApi.posts.edit).toHaveBeenCalledWith({
+        id: '1',
+        title: 'title with new name',
+        lexical: 'content with new name',
+        updated_at: '2023-12-01T00:00:00.000Z',
+      });
+      expect(result).toEqual({
+        postId: '1',
+        success: true
+      });
+    });
+
     it('should successfully update post with mobiledoc content', async () => {
       const post = {
         id: '1',
