@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Queue } from "bull";
 import type { RedisClientType } from "redis";
 
-const BATCH_SIZE = 5;
+export const BATCH_SIZE = 25;
 const ONE_DAY_TTL = { EX: 24 * 60 * 60 };
 export const QUEUE_OPTIONS = {
   attempts: 3,

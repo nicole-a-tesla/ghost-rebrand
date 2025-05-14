@@ -3,7 +3,8 @@ import {
   validateRequestFields,
   addJobsToQueue,
   handleRenameKickoff,
-  QUEUE_OPTIONS
+  QUEUE_OPTIONS,
+  BATCH_SIZE
 } from './rename';
 import { type RequestBody } from './rename';
 
@@ -98,7 +99,7 @@ describe('/api/rename', () => {
     };
     
     const testJobId = 'test-job-id-123';
-    const totalPostCount = 27;
+    const totalPostCount = BATCH_SIZE * 6; // 6 pages of posts
 
     beforeEach(() => {
       vi.clearAllMocks();
@@ -157,7 +158,7 @@ describe('/api/rename', () => {
     });
 
     it('sends pages to queue for processing', async () => {
-      const expectedTotalPages = Math.ceil(totalPostCount / 5); // 6 pages
+      const expectedTotalPages = Math.ceil(totalPostCount / BATCH_SIZE); // 6 pages
       
       await handleRenameKickoff(
         testRequestBody,
@@ -181,7 +182,7 @@ describe('/api/rename', () => {
           apiKey: testRequestBody.apiKey,
           oldName: testRequestBody.oldName,
           newName: testRequestBody.newName,
-          batchSize: 5,
+          batchSize: BATCH_SIZE,
           page: 1
         },
         QUEUE_OPTIONS
