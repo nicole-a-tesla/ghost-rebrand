@@ -41,6 +41,7 @@ export const processPost = async (
   newName: string
 ) => {
     const result = { postId: post.id, success: false } as ProcessPostResult;
+    console.log(`Processing post ${post.id}`);
     const { content, useMobiledoc } = extractPostContent(post);
 
     if (content === undefined && post.title === undefined) {
@@ -75,6 +76,7 @@ export const processPost = async (
     try {
       await ghostApi.posts.edit(newData);
       result.success = true;
+      console.log(`Post ${post.id} updated`);
       return result;
     } catch (error) {
       // Log error for debugging but don't throw
@@ -142,6 +144,7 @@ export const setupQueueProcessor = async () => {
       page,
     } = job.data as JobData;
     try {
+      console.log(`Starting Job ${jobId} (page ${page}, batchSize ${batchSize})`);
       const ghostApi = new GhostAdminApi({
         url: siteUrl,
         key: apiKey,
@@ -157,6 +160,7 @@ export const setupQueueProcessor = async () => {
         newName
       );
       await updateJobStatus(redis, jobId, successfullyProcessed, processFailed);
+      console.log(`Job ${jobId} page ${page} complete`);
     } catch (error) {
       console.error(`Failed to process job ${jobId}:`, error);
       throw error;
